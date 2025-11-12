@@ -1,0 +1,9 @@
+# Ignore datasets and other large files
+dataset/
+__pycache__/
+*.pth
+*.zip
+*.rar
+*.tar
+*.7z
+venv/
