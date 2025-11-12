@@ -1,0 +1,23 @@
+🧠 Training Log
+
+Epoch 1/2 - Loss: 0.9134 | Acc: 0.9058 | Val_Loss: 0.5070 | Val_Acc: 0.7393 | Dice: 0.4532
+✅ Best model saved.
+Epoch 2/2 - Loss: 0.6217 | Acc: 0.9415 | Val_Loss: 0.1781 | Val_Acc: 0.9305 | Dice: 0.7925
+✅ Best model saved.
+
+Average Dice Score: 0.7925
+Precision: 0.8256, Recall: 0.7620, F1: 0.7925
+
+Confusion Matrix:
+[[367634  12918]
+ [ 19100  61148]]
+Classification Report:
+              precision    recall  f1-score   support
+
+  Background       0.95      0.97      0.96    380552
+    Leaf/ROI       0.83      0.76      0.79     80248
+
+    accuracy                           0.93    460800
+   macro avg       0.89      0.86      0.88    460800
+weighted avg       0.93      0.93      0.93    460800
+
