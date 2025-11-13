@@ -2,7 +2,6 @@ flask
 flask-cors
 torch
 torchvision
-numpy
-opencv-python
 Pillow
 gunicorn
+numpy

@@ -8,6 +8,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from PIL import Image
 import numpy as np
+from flask import Flask, request, send_file
+
+app = Flask(__name__)
+CORS(app)
 
 # ========================
 # 1. U-Net Model (same as in unet_train.py)
