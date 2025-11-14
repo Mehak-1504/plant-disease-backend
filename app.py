@@ -4,17 +4,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from PIL import Image
 import numpy as np
-from flask import Flask, request, send_file
+import requests
 
 app = Flask(__name__)
 CORS(app)
 
 # ========================
-# 1. U-Net Model (same as in unet_train.py)
+# 1. U-Net Model Definition
 # ========================
 
 class DoubleConv(nn.Module):
@@ -49,52 +49,66 @@ class UNet(nn.Module):
         self.dconv_up3 = DoubleConv(512, 256)
         self.dconv_up2 = DoubleConv(256, 128)
         self.dconv_up1 = DoubleConv(128, 64)
+
         self.conv_last = nn.Conv2d(64, n_classes, 1)
 
     def forward(self, x):
         conv1 = self.dconv_down1(x)
         x = self.maxpool(conv1)
+
         conv2 = self.dconv_down2(x)
         x = self.maxpool(conv2)
+
         conv3 = self.dconv_down3(x)
         x = self.maxpool(conv3)
+
         x = self.dconv_down4(x)
 
         x = self.upsample1(x)
         x = torch.cat([x, conv3], dim=1)
         x = self.dconv_up3(x)
+
         x = self.upsample2(x)
         x = torch.cat([x, conv2], dim=1)
         x = self.dconv_up2(x)
+
         x = self.upsample3(x)
         x = torch.cat([x, conv1], dim=1)
         x = self.dconv_up1(x)
+
         return self.conv_last(x)
 
 
 # ========================
-# 2. Flask Setup
+# 2. Download Model Automatically
 # ========================
-app = Flask(__name__)
-CORS(app)
+
+MODEL_URL = "https://github.com/Mehak-1504/plant-disease-backend/releases/download/v1.0/best_unet_model.pth"
+MODEL_PATH = "best_unet_model.pth"
+
+if not os.path.exists(MODEL_PATH):
+    print("⚠️ Model file not found — downloading...")
+    r = requests.get(MODEL_URL)
+    open(MODEL_PATH, "wb").write(r.content)
+    print("✅ Downloaded best_unet_model.pth")
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load trained model
 model = UNet().to(device)
-model_path = "../best_unet_model.pth"
 
-if os.path.exists(model_path):
-    model.load_state_dict(torch.load(model_path, map_location=device))
+try:
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     model.eval()
-    print("✅ Model loaded successfully!")
-else:
-    print("❌ Model file not found! Train first or check the path.")
+    print("✅ Model loaded correctly!")
+except Exception as e:
+    print("❌ Error loading model:", e)
 
 
 # ========================
 # 3. Image Transform
 # ========================
+
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor()
@@ -102,33 +116,39 @@ transform = transforms.Compose([
 
 
 # ========================
-# 4. Prediction Endpoint
+# 4. Prediction Route
 # ========================
+
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image uploaded'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
 
-    file = request.files['image']
+    file = request.files['file']
     image = Image.open(io.BytesIO(file.read())).convert('RGB')
+    
     img_tensor = transform(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
         output = model(img_tensor)
         pred_mask = torch.sigmoid(output).cpu().squeeze().numpy()
-        pred_mask = (pred_mask > 0.5).astype(np.uint8) * 255
 
-    # Convert mask to list (for frontend JSON)
-    mask_list = pred_mask.tolist()
+    # Convert mask to uint8
+    pred_mask = (pred_mask > 0.5).astype(np.uint8) * 255
+    mask_img = Image.fromarray(pred_mask).convert("L")
 
-    return jsonify({
-        'message': 'Prediction successful',
-        'mask': mask_list
-    })
+    # Return mask image
+    byte_io = io.BytesIO()
+    mask_img.save(byte_io, 'PNG')
+    byte_io.seek(0)
+
+    return send_file(byte_io, mimetype='image/png')
 
 
 # ========================
-# 5. Run Server
+# 5. Render Server Start
 # ========================
+
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
