@@ -1,8 +1,8 @@
-flask==2.3.5
-gunicorn==23.1.2
-requests==2.31.0
-numpy==1.26.5
-opencv-python==4.8.1.78
-torch==2.1.1
-torchvision==0.16.2
-Pillow==10.1.1
+flask
+gunicorn
+requests
+numpy
+opencv-python
+torch
+torchvision
+Pillow
