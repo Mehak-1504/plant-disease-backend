@@ -2,7 +2,6 @@ import os
 import io
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchvision import transforms
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
@@ -10,13 +9,15 @@ from PIL import Image
 import numpy as np
 import requests
 
+# ========================
+# 1. Flask App & CORS
+# ========================
 app = Flask(__name__)
 CORS(app)
 
 # ========================
-# 1. U-Net Model Definition
+# 2. U-Net Model Definition
 # ========================
-
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
@@ -31,7 +32,6 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
-
 
 class UNet(nn.Module):
     def __init__(self, n_classes=1):
@@ -78,11 +78,9 @@ class UNet(nn.Module):
 
         return self.conv_last(x)
 
-
 # ========================
-# 2. Download Model Automatically
+# 3. Download Model Automatically
 # ========================
-
 MODEL_URL = "https://github.com/Mehak-1504/plant-disease-backend/releases/download/v1.0/best_unet_model.pth"
 MODEL_PATH = "best_unet_model.pth"
 
@@ -92,9 +90,7 @@ if not os.path.exists(MODEL_PATH):
     open(MODEL_PATH, "wb").write(r.content)
     print("✅ Downloaded best_unet_model.pth")
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 model = UNet().to(device)
 
 try:
@@ -104,27 +100,23 @@ try:
 except Exception as e:
     print("❌ Error loading model:", e)
 
-
 # ========================
-# 3. Image Transform
+# 4. Image Transform
 # ========================
-
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor()
 ])
 
-
 # ========================
-# 4. Prediction Route
+# 5. Prediction Route
 # ========================
-
-@app.route('/predict', methods=['POST'])
+@app.route('/api/detect', methods=['POST'])
 def predict():
-    if 'file' not in request.files:
+    if 'image' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
 
-    file = request.files['file']
+    file = request.files['image']
     image = Image.open(io.BytesIO(file.read())).convert('RGB')
     
     img_tensor = transform(image).unsqueeze(0).to(device)
@@ -133,22 +125,28 @@ def predict():
         output = model(img_tensor)
         pred_mask = torch.sigmoid(output).cpu().squeeze().numpy()
 
-    # Convert mask to uint8
+    # Convert mask to uint8 image
     pred_mask = (pred_mask > 0.5).astype(np.uint8) * 255
     mask_img = Image.fromarray(pred_mask).convert("L")
 
-    # Return mask image
+    # Convert mask to bytes
     byte_io = io.BytesIO()
     mask_img.save(byte_io, 'PNG')
     byte_io.seek(0)
 
+    # Example JSON data (replace with actual disease + remedy logic later)
+    result_json = {
+        "disease": "Example Leaf Disease",
+        "remedy": "Apply neem oil and avoid overwatering"
+    }
+
+    # Return mask image as file and JSON as headers (or return JSON + mask URL)
+    # For now, just send mask image
     return send_file(byte_io, mimetype='image/png')
 
-
 # ========================
-# 5. Render Server Start
+# 6. Run Server
 # ========================
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
