@@ -1,22 +1,20 @@
 import os
 import io
+import base64
 import torch
 import torch.nn as nn
 from torchvision import transforms
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from PIL import Image
-import numpy as np
 import requests
+import numpy as np
 
-# ========================
-# 1. Flask App & CORS
-# ========================
 app = Flask(__name__)
 CORS(app)
 
 # ========================
-# 2. U-Net Model Definition
+# 1. U-Net Model Definition
 # ========================
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -79,7 +77,7 @@ class UNet(nn.Module):
         return self.conv_last(x)
 
 # ========================
-# 3. Download Model Automatically
+# 2. Load Model
 # ========================
 MODEL_URL = "https://github.com/Mehak-1504/plant-disease-backend/releases/download/v1.0/best_unet_model.pth"
 MODEL_PATH = "best_unet_model.pth"
@@ -101,7 +99,7 @@ except Exception as e:
     print("❌ Error loading model:", e)
 
 # ========================
-# 4. Image Transform
+# 3. Image Transform
 # ========================
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
@@ -109,40 +107,48 @@ transform = transforms.Compose([
 ])
 
 # ========================
+# 4. Disease Mapping (example)
+# ========================
+DISEASES = {
+    "Powdery Mildew": "Apply neem oil and avoid overwatering",
+    "Leaf Spot": "Remove affected leaves and use fungicide",
+    "Rust": "Apply sulfur-based fungicide"
+}
+
+# ========================
 # 5. Prediction Route
 # ========================
 @app.route('/api/detect', methods=['POST'])
 def predict():
     if 'image' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
+        return jsonify({'error': 'No image uploaded'}), 400
 
     file = request.files['image']
     image = Image.open(io.BytesIO(file.read())).convert('RGB')
-    
     img_tensor = transform(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
         output = model(img_tensor)
         pred_mask = torch.sigmoid(output).cpu().squeeze().numpy()
 
-    # Convert mask to uint8 image
+    # Convert mask to uint8
     pred_mask = (pred_mask > 0.5).astype(np.uint8) * 255
     mask_img = Image.fromarray(pred_mask).convert("L")
 
-    # Convert mask to bytes
-    byte_io = io.BytesIO()
-    mask_img.save(byte_io, 'PNG')
-    byte_io.seek(0)
+    # Convert PIL image to base64
+    buffered = io.BytesIO()
+    mask_img.save(buffered, format="PNG")
+    mask_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-    # Example JSON data (replace with actual disease + remedy logic later)
-    result_json = {
-        "disease": "Example Leaf Disease",
-        "remedy": "Apply neem oil and avoid overwatering"
-    }
+    # Example: simple disease detection logic (replace with your real logic)
+    disease_name = np.random.choice(list(DISEASES.keys()))
+    remedy_text = DISEASES[disease_name]
 
-    # Return mask image as file and JSON as headers (or return JSON + mask URL)
-    # For now, just send mask image
-    return send_file(byte_io, mimetype='image/png')
+    return jsonify({
+        "mask": mask_base64,
+        "disease": disease_name,
+        "remedy": remedy_text
+    })
 
 # ========================
 # 6. Run Server
